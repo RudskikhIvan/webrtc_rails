@@ -60,6 +60,7 @@ class WebRTC.Client extends MicroEvent
     @stream = stream
     WebRTC.attachMediaStream(@videoElement, stream) if @videoElement
     @trigger 'local_stream', stream
+    @connect()
 
   getPartner: (guid)->
     @partners[guid]
