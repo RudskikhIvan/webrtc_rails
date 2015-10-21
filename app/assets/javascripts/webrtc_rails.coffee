@@ -102,6 +102,9 @@ class WebRTC.Client extends MicroEvent
 
   stopScreenCapture: ->
     window.postMessage({target: capture_event_backend, type: 'stop_capture', data: {}}, '*')
+
+  onCapturingStreamEnded: ->
+    @trigger 'plugin_stream_ended'
     $.each @partners, (k,partner)->
       partner.stopScreenCapturing()
 
@@ -151,6 +154,7 @@ class WebRTC.Client extends MicroEvent
     switch event
       when 'send_offer' then @hanglePluginOffer(data)
       when 'send_candidate' then @hanglePluginICECandidate(data)
+      when 'stream_ended' then @onCapturingStreamEnded()
 
   sendCapturingEngineEvent: (event_name, data)->
     window.postMessage({target: capture_event_backend, type: event_name, data: JSON.parse(JSON.stringify(data))}, '*')

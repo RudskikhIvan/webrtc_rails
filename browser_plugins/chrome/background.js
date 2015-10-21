@@ -34,12 +34,7 @@ function startCapture(params) {
 }
 
 function stopCapture() {
-  var partner;
   if (localStream) localStream.stop();
-  for (var k in partners) {
-    partners[k].disconnect();
-    partners[k] = null;
-  }
   localStream = null;
 }
 
@@ -77,6 +72,7 @@ function onAccessApproved(desktop_id) {
 
 function createConnection(stream) {
   if (pearConnection) pearConnection.close();
+  stream.addEventListener('ended', onStreamEnded);
   localICECandidates = [];
   pearConnection = new webkitRTCPeerConnection({iceServers: captureParams.iceServers});
   pearConnection.addStream(stream);
@@ -85,6 +81,10 @@ function createConnection(stream) {
     pearConnection.setLocalDescription(new RTCSessionDescription(offer));
     sendEvent('send_offer', offer);
   });
+}
+
+function onStreamEnded(){
+  sendEvent('stream_ended');
 }
 
 function handleAnswer(answer) {

@@ -13,9 +13,6 @@
     "matches": ["http://*/*"],
     "js": ["script.js"]
   }],
-  "browser_action": {
-    "default_title": "Capture Screen"
-  },
   "permissions": [
     "desktopCapture", "tabs"
   ]
