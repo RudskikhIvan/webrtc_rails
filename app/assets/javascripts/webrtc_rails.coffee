@@ -356,6 +356,8 @@ class WebRTC.CapturingConnection
     if stream
       @source = true
       @stream = stream
+    else
+      @source = false
 
     @localICECandidates = []
     configuration = iceServers: @client.options.iceServers
@@ -388,6 +390,7 @@ class WebRTC.CapturingConnection
     @connection.setRemoteDescription(new WebRTC.RTCSessionDescription(answer))
 
   onRemoteStreamAdded: (stream)->
+    return if @source
     @stream = stream
     @client.trigger 'partner.captured_stream_added', @
 
