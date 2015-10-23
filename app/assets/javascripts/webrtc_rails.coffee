@@ -3,8 +3,9 @@
 
 'use strict'
 
-capture_event_frontend = 'screen_capture_frontend'
-capture_event_backend = 'screen_capture_backend'
+CAPTURE_EVENT_FRONTEND = 'screen_capture_frontend'
+CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
+PLUGIN_VERSION_NEEDED = '1.0.1'
 
 
 WebRTC =
@@ -47,6 +48,7 @@ class WebRTC.Client extends MicroEvent
   partners: null
   pluginConnection: null
   pluginStream: null
+  pluginVersion: null
 
   defaultOptions:
     media:
@@ -61,6 +63,7 @@ class WebRTC.Client extends MicroEvent
     @partners = {}
     @setupLocalVideo()
     @initCapturingPluginEvents()
+    @checkPluginVersion() if @options.capturingRequired
 
   setupLocalVideo: ->
     WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), ((error)=> console.log(error))
@@ -94,14 +97,14 @@ class WebRTC.Client extends MicroEvent
 
   initCapturingPluginEvents: ->
     window.addEventListener 'message', (event)=>
-      return if event.data.target != capture_event_frontend
+      return if event.data.target != CAPTURE_EVENT_FRONTEND
       @onPluginEvent(event.data.type, event.data.data)
 
   startScreenCapture: ->
-    window.postMessage({target: capture_event_backend, type: 'start_capture', data: @capturingParams()}, '*')
+    window.postMessage({target: CAPTURE_EVENT_BACKEND, type: 'start_capture', data: @capturingParams()}, '*')
 
   stopScreenCapture: ->
-    window.postMessage({target: capture_event_backend, type: 'stop_capture', data: {}}, '*')
+    window.postMessage({target: CAPTURE_EVENT_BACKEND, type: 'stop_capture', data: {}}, '*')
 
   onCapturingStreamEnded: ->
     @trigger 'plugin_stream_ended'
@@ -155,10 +158,25 @@ class WebRTC.Client extends MicroEvent
       when 'send_offer' then @hanglePluginOffer(data)
       when 'send_candidate' then @hanglePluginICECandidate(data)
       when 'stream_ended' then @onCapturingStreamEnded()
+      when 'version' then @onPluginVersionReceived(data)
 
   sendCapturingEngineEvent: (event_name, data)->
-    window.postMessage({target: capture_event_backend, type: event_name, data: JSON.parse(JSON.stringify(data))}, '*')
+    window.postMessage({target: CAPTURE_EVENT_BACKEND, type: event_name, data: JSON.parse(JSON.stringify(data))}, '*')
 
+  checkPluginVersion: ->
+    @sendCapturingEngineEvent('version', null)
+    setTimeout @onPluginVersionReceived.bind(@), 200
+
+  onPluginVersionReceived: (version)->
+    return if @pluginVersion
+    @pluginVersion = version if version
+    if @pluginVersion
+      if @pluginVersion != PLUGIN_VERSION_NEEDED
+        @trigger 'plugin_version_not_match', @pluginVersion
+      else
+        @trigger 'plugin_version', @pluginVersion
+    else
+      @trigger 'plugin_not_exists'
 
 class WebRTC.SyncEngine
 

@@ -1,6 +1,6 @@
 {
-  "name": "WebRTC Desktop",
-  "version": "2",
+  "name": "WebRTC Screen Sharing",
+  "version": "1.0",
   "manifest_version": 2,
   "icons": {
     "16": "desktop.png",
@@ -10,8 +10,9 @@
     "scripts": ["background.js"]
   },
   "content_scripts": [{
-    "matches": ["http://*/*"],
-    "js": ["script.js"]
+    "matches": ["*://*/*"],
+    "js": ["script.js"],
+    "run_at": "document_start"
   }],
   "permissions": [
     "desktopCapture", "tabs"

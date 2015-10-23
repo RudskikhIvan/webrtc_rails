@@ -3,6 +3,7 @@ var captureParams = null;
 var partners = {};
 var pearConnection = null;
 var localICECandidates = null;
+var VERSION = '1.0.0';
 
 chrome.extension.onMessage.addListener(function(request){
   if (request && request.type) onEvent(request.type, request.data);
@@ -24,6 +25,7 @@ function onEvent(type, data) {
     case 'stop_capture' : stopCapture(data); break;
     case 'handle_answer' : handleAnswer(data); break;
     case 'remote_candidate' : handleRemoteICECandidate(data); break;
+    case 'version' : sendEvent('version', VERSION)
   }
 }
 
