@@ -3,8 +3,9 @@
   "version": "1.0",
   "manifest_version": 2,
   "icons": {
-    "16": "desktop.png",
-    "128": "desktop.png"
+    "16": "icon_16.png",
+    "48": "icon_48.png",
+    "128": "icon_256.png"
   },
   "background": {
     "scripts": ["background.js"]

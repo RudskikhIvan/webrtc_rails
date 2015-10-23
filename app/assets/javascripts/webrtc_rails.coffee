@@ -182,7 +182,6 @@ class WebRTC.Client extends MicroEvent
     vs = version.split('.')
     vs[0] * 100 + (vs[1] || 0) * 10 + (vs[2] || 0)
 
-
 class WebRTC.SyncEngine
 
   constructor: (client, options)->
