@@ -5,7 +5,7 @@
 
 CAPTURE_EVENT_FRONTEND = 'screen_capture_frontend'
 CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
-PLUGIN_VERSION_NEEDED = '1.0.1'
+PLUGIN_VERSION_NEEDED = '1.0.0'
 
 
 WebRTC =
