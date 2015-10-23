@@ -171,12 +171,17 @@ class WebRTC.Client extends MicroEvent
     return if @pluginVersion
     @pluginVersion = version if version
     if @pluginVersion
-      if @pluginVersion != PLUGIN_VERSION_NEEDED
+      if @versionToInt( @pluginVersion ) < @versionToInt( PLUGIN_VERSION_NEEDED )
         @trigger 'plugin_version_not_match', @pluginVersion
       else
         @trigger 'plugin_version', @pluginVersion
     else
       @trigger 'plugin_not_exists'
+
+  versionToInt: (version)->
+    vs = version.split('.')
+    vs[0] * 100 + (vs[1] || 0) * 10 + (vs[2] || 0)
+
 
 class WebRTC.SyncEngine
 

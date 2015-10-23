@@ -1,7 +1,5 @@
 
 console.log('capturing plugin inited');
-document.body.setAttribute('data-capturing-plugin-exists', true);
-
 //Send event to page script
 function sendEventToPage(event_name, data) {
     window.postMessage({target: 'screen_capture_frontend', type: event_name, data: data}, '*');
