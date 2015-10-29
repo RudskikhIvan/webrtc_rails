@@ -5,7 +5,8 @@
 
 CAPTURE_EVENT_FRONTEND = 'screen_capture_frontend'
 CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
-PLUGIN_VERSION_NEEDED = '1.0.0'
+PLUGIN_VERSION_NEEDED = '1.0.1'
+CHECK_VERSION_TIMEOUT = 2000
 
 
 WebRTC =
@@ -132,7 +133,7 @@ class WebRTC.Client extends MicroEvent
   videoMuted: -> !@stream?.getVideoTracks()[0].enabled
 
   hanglePluginOffer: (offer)->
-    conn = new WebRTC.RTCPeerConnection(iceServers: @options.iceServers)
+    conn = new WebRTC.RTCPeerConnection(iceServers: [])
     conn.addEventListener 'addstream', (event)=> @handlePluginStream(event.stream)
     conn.addEventListener 'icecandidate', (event)=> @sendCapturingEngineEvent('remote_candidate', event.candidate) if event.candidate
     conn.setRemoteDescription(new WebRTC.RTCSessionDescription(offer))
@@ -165,7 +166,7 @@ class WebRTC.Client extends MicroEvent
 
   checkPluginVersion: ->
     @sendCapturingEngineEvent('version', null)
-    setTimeout @onPluginVersionReceived.bind(@), 200
+    setTimeout @onPluginVersionReceived.bind(@), CHECK_VERSION_TIMEOUT
 
   onPluginVersionReceived: (version)->
     return if @pluginVersion
@@ -352,9 +353,7 @@ class WebRTC.Partner
     @capturingConnection.disconnect()
 
   disconnect: ->
-    try
-      @connection.close()
-    catch ex
+    try @connection.close() catch ex
     @connected = false
     #TODO: send signal
     @client.trigger 'partner.disconnect', @
@@ -374,7 +373,7 @@ class WebRTC.CapturingConnection
     @client.trigger 'partner.capturing_created', @
 
   connect: (stream)->
-    @connection.close() if @connection
+    @closeConnection()
     if stream
       @source = true
       @stream = stream
@@ -426,13 +425,18 @@ class WebRTC.CapturingConnection
       @syncEngine.sendCapturedOffer @guid, offer
 
   disconnect: ->
-    @connection.close() if @connection
-    @connection = null
+    @closeConnection()
     @stream = null
     if @source
       @syncEngine.sendCapturedStop(@guid)
     else
       @client.trigger 'partner.captured_stream_removed', @
+
+  closeConnection: ->
+    try
+      @connection.close() if @connection
+      @connection = null
+    catch ex
 
 if typeof module != 'undefined'
   module.exports =

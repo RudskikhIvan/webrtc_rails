@@ -2,8 +2,7 @@ var localStream = null;
 var captureParams = null;
 var partners = {};
 var pearConnection = null;
-var localICECandidates = null;
-var VERSION = '1.0.0';
+var VERSION = '1.0.1';
 
 chrome.extension.onMessage.addListener(function(request){
   if (request && request.type) onEvent(request.type, request.data);
@@ -36,7 +35,10 @@ function startCapture(params) {
 }
 
 function stopCapture() {
-  if (localStream) localStream.stop();
+  if ( !localStream ) return;
+  var track = localStream.getTracks()[0];
+  if ( track ) track.stop();
+  localStream.active = false;
   localStream = null;
 }
 
@@ -73,10 +75,10 @@ function onAccessApproved(desktop_id) {
 }
 
 function createConnection(stream) {
-  if (pearConnection) pearConnection.close();
+  if (pearConnection) disconnect();
   stream.addEventListener('ended', onStreamEnded);
   localICECandidates = [];
-  pearConnection = new webkitRTCPeerConnection({iceServers: captureParams.iceServers});
+  pearConnection = new webkitRTCPeerConnection({iceServers: []});
   pearConnection.addStream(stream);
   pearConnection.addEventListener('icecandidate', handleLocalICECandidate.bind(this));
   pearConnection.createOffer(function(offer){
@@ -109,9 +111,11 @@ function handleRemoteICECandidate (candidate) {
 }
 
 function disconnect() {
-  if ( pearConnection ) {
-    pearConnection.removeStream(localStream);
-    pearConnection = null;
-    pearConnection.close();
-  }
+  try {
+    if ( pearConnection ) {
+      if ( localStream ) pearConnection.removeStream(localStream);
+      pearConnection = null;
+      pearConnection.close();
+    }
+  } catch(e) {}
 }

@@ -1,6 +1,6 @@
 {
   "name": "WebRTC Screen Sharing",
-  "version": "1.0",
+  "version": "1.1",
   "manifest_version": 2,
   "icons": {
     "16": "icon_16.png",
@@ -16,6 +16,7 @@
     "run_at": "document_start"
   }],
   "permissions": [
-    "desktopCapture", "tabs"
+    "desktopCapture",
+    "tabs"
   ]
 }
