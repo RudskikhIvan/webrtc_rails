@@ -11,6 +11,7 @@ CHECK_VERSION_TIMEOUT = 2000
 
 WebRTC =
   defaultOptions: {}
+  debug: false
 
   attachMediaStream: (element, stream) ->
     if typeof element.srcObject != 'undefined'
@@ -41,6 +42,10 @@ WebRTC =
 
     urls.map (url)-> WebRTC.createIceServer(url, username, password)
 
+  log: ->
+    return unless WebRTC.debug
+    console.log.apply(console, arguments)
+
 
 class WebRTC.Client extends MicroEvent
 
@@ -61,13 +66,14 @@ class WebRTC.Client extends MicroEvent
     @guid = @options.guid || @generateGuid()
     @syncEngine = @options.syncEngine || new WebRTC.SyncEngine(@, @options)
     @stream = @options.stream
+    WebRTC.debug = true if @options.debug
     @partners = {}
     @setupLocalVideo()
     @initCapturingPluginEvents()
     @checkPluginVersion() if @options.capturingRequired
 
   setupLocalVideo: ->
-    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), ((error)=> console.log(error))
+    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), ((error)=> WebRTC.log(error))
 
   handleLocalStreem: (stream)->
     @stream ||= stream
@@ -201,6 +207,9 @@ class WebRTC.SyncEngine
     @initConnection()
     @sendConnect()
 
+  sendICECandidate: (to, candidate)->
+    @_sendData('candidate', candidate, to)
+
   sendICECandidates: (to, candidates)->
     @_sendData('candidates', candidates, to)
 
@@ -231,12 +240,10 @@ class WebRTC.SyncEngine
   sendCapturedStop: (to)->
     @_sendData('captured.stop', {}, to)
 
-  sendICECandidate: (to, candidate)->
-    @_sendData('candidate', candidate, to)
-
   handleSignal: (signal) ->
     signal_data = JSON.parse(signal.data)
     partner = @client.getPartner(signal.from_guid)
+    WebRTC.log("Signal [#{signal.signal_type}] received: ", signal_data)
     switch signal.signal_type
       when 'offer'
         partner ||= @client.addPartner(guid: signal.from_guid)
@@ -244,13 +251,12 @@ class WebRTC.SyncEngine
       when 'answer'
         partner.handleAnswer signal_data
       when 'candidates'
-        $.each signal_data, (i, candidate) ->
-          partner.handleRemoteICECandidate candidate
+        partner.handleRemoteICECandidates signal_data
       when 'candidate'
         partner.handleRemoteICECandidate signal_data
       when 'connect'
         partner = @client.addPartner(signal_data)
-        partner.sendOffer({})
+        partner.sendOffer()
       when 'disconnect'
         @client.removePartner(signal.from_guid)
       when 'captured.offer'
@@ -260,12 +266,12 @@ class WebRTC.SyncEngine
       when 'captured.stop'
         partner.stopScreenCapturing()
       when 'captured.candidates'
-        $.each signal_data, (i, candidate) ->
-          partner.capturingConnection.handleRemoteICECandidate candidate
+        for candidate in signal_data
+          partner.capturingConnection.handleRemoteICECandidates candidate
       when 'captured.candidate'
         partner.capturingConnection.handleRemoteICECandidate signal_data
       else
-        console.log 'warning', 'Unknown signal type "' + signal.signal_type + '" received.', signal
+        WebRTC.log 'warning', 'Unknown signal type "' + signal.signal_type + '" received.', signal
         break
 
   _sendData: (signal, data, to = null)->
@@ -277,7 +283,9 @@ class WebRTC.Partner
   connection: null
   guid: null
   client: null
-
+  source: false
+  receivedSignals: null
+  localICECandidatesComplete: false
 
   constructor: (data, options)->
     @guid = data.guid
@@ -302,6 +310,8 @@ class WebRTC.Partner
 
   connect: ->
     @localICECandidates = []
+    @localICECandidatesComplete = false
+    @receivedSignals = {}
     configuration = iceServers: @client.options.iceServers
     @connection = new WebRTC.RTCPeerConnection(configuration)
     @connection.addStream @client.stream
@@ -309,14 +319,16 @@ class WebRTC.Partner
     @connection.addEventListener 'addstream', (event)=> @onRemoteStreamAdded(event.stream)
     @connection.addEventListener 'removestream', @onRemoteStreamRemoved.bind(@)
 
-  sendOffer: (options) ->
+  sendOffer: ->
+    @source = true
     @connection.createOffer ((offer) =>
       @connection.setLocalDescription offer
       @syncEngine.sendOffer @guid, offer
-      #setTimeout self._checkForConnection, self._options.connectionTimeout
     ), ->
 
   handleOffer: (offer) ->
+    @source = false
+    @receivedSignals['offer'] = offer
     offer = new WebRTC.RTCSessionDescription(offer)
     @connection.setRemoteDescription offer
     @connection.createAnswer ((answer) =>
@@ -325,11 +337,19 @@ class WebRTC.Partner
     ), ->
 
   handleAnswer: (answer) ->
+    @receivedSignals['answer'] = answer
     @connection.setRemoteDescription new WebRTC.RTCSessionDescription(answer)
+    @sendLocalICECandidates()
 
   handleRemoteICECandidate: (candidate) ->
     candidate = new WebRTC.RTCIceCandidate(candidate)
     @connection.addIceCandidate candidate
+
+  handleRemoteICECandidates: (candidates) ->
+    @receivedSignals['candidates'] = candidates
+    for candidate in candidates
+      candidate = new WebRTC.RTCIceCandidate(candidate)
+      @connection.addIceCandidate candidate
 
   handleLocalICECandidate: (event)->
     candidate = event.candidate
@@ -337,7 +357,16 @@ class WebRTC.Partner
       @localICECandidates.push event.candidate
       @syncEngine.sendICECandidate @guid, event.candidate
     else
-      @syncEngine.sendICECandidates @guid, @localICECandidates
+      @localICECandidatesComplete = true
+      @sendLocalICECandidates()
+
+  sendLocalICECandidates: ->
+    return unless @localICECandidates
+    return unless @localICECandidatesComplete
+    return if @source and !@receivedSignals['answer']
+    @syncEngine.sendICECandidates @guid, @localICECandidates
+    @localICECandidates = null
+    @localICECandidatesComplete = false
 
   onRemoteStreamAdded: (stream)->
     @connected = true
