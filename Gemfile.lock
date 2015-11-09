@@ -1,7 +1,7 @@
-5PATH
+PATH
   remote: .
   specs:
-    webrtc_rails (1.0.5)
+    webrtc_rails (1.0.6)
       faye-rails
       jquery-rails (~> 4.0)
       rails (~> 4.2.0)
