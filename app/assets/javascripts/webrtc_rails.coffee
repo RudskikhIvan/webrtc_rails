@@ -71,6 +71,10 @@ class WebRTC.Client extends MicroEvent
     @setupLocalVideo()
     @initCapturingPluginEvents()
     @checkPluginVersion() if @options.capturingRequired
+    if WebRTC.debug
+      WebRTC.clients ||= {}
+      WebRTC.clients[@guid] = @
+
 
   setupLocalVideo: ->
     WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), ((error)=> WebRTC.log(error))
@@ -275,6 +279,7 @@ class WebRTC.SyncEngine
         break
 
   _sendData: (signal, data, to = null)->
+    WebRTC.log("Signal [#{signal}] sended", data)
     @faye.publish(@roomUrl, {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data)})
 
 
@@ -334,7 +339,7 @@ class WebRTC.Partner
     @connection.createAnswer ((answer) =>
       @connection.setLocalDescription new WebRTC.RTCSessionDescription(answer)
       @syncEngine.sendAnswer @guid, answer
-    ), ->
+    ), (err)-> WebRTC.log("Answer creating error", err)
 
   handleAnswer: (answer) ->
     @receivedSignals['answer'] = answer
