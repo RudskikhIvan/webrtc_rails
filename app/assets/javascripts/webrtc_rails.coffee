@@ -291,7 +291,7 @@ class WebRTC.SyncEngine
   _sendData: (signal, data, to = null, options = {})->
     signalID = "#{signal}-#{@_timestamp()}"
 
-    if signal != 'delivery_report'
+    if signal != 'delivery_report' and signal != 'connect'
       tryCount = options.tryCount ||= 1
       if TRY_COUNT_LIMIT >= tryCount
         sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 500 )
