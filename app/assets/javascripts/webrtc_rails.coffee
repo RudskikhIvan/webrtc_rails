@@ -7,7 +7,7 @@ CAPTURE_EVENT_FRONTEND = 'screen_capture_frontend'
 CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
 PLUGIN_VERSION_NEEDED = '1.0.1'
 CHECK_VERSION_TIMEOUT = 2000
-TRY_COUNT_LIMIT = 5
+TRY_COUNT_LIMIT = 3
 
 
 WebRTC =
@@ -294,7 +294,7 @@ class WebRTC.SyncEngine
     if signal != 'delivery_report' and signal != 'connect'
       tryCount = options.tryCount ||= 1
       if TRY_COUNT_LIMIT >= tryCount
-        sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 500 )
+        sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 1000 )
 
     output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data), signal_id: signalID}
     WebRTC.log("Signal [#{signal}] sended", output)
