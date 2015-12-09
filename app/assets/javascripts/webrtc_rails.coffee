@@ -279,8 +279,9 @@ class WebRTC.SyncEngine
         break
 
   _sendData: (signal, data, to = null)->
-    WebRTC.log("Signal [#{signal}] sended", data)
-    @faye.publish(@roomUrl, {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data)})
+    output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data)}
+    WebRTC.log("Signal [#{signal}] sended", output)
+    @faye.publish(@roomUrl, output)
 
 
 class WebRTC.Partner
