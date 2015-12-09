@@ -293,8 +293,8 @@ class WebRTC.SyncEngine
 
     if signal != 'delivery_report'
       tryCount = options.tryCount ||= 1
-      if TRY_COUNT_LIMIT <= tryCount
-        sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 200 )
+      if TRY_COUNT_LIMIT >= tryCount
+        sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 500 )
 
     output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data), signal_id: signalID}
     WebRTC.log("Signal [#{signal}] sended", output)
