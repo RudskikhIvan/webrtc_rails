@@ -7,6 +7,7 @@ CAPTURE_EVENT_FRONTEND = 'screen_capture_frontend'
 CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
 PLUGIN_VERSION_NEEDED = '1.0.1'
 CHECK_VERSION_TIMEOUT = 2000
+TRY_COUNT_LIMIT = 5
 
 
 WebRTC =
@@ -193,6 +194,8 @@ class WebRTC.Client extends MicroEvent
     vs = version.split('.')
     vs[0] * 100 + (vs[1] || 0) * 10 + (vs[2] || 0)
 
+
+sendedSignals = {}
 class WebRTC.SyncEngine
 
   constructor: (client, options)->
@@ -248,6 +251,10 @@ class WebRTC.SyncEngine
     signal_data = JSON.parse(signal.data)
     partner = @client.getPartner(signal.from_guid)
     WebRTC.log("Signal [#{signal.signal_type}] received: ", signal_data)
+
+    if signal.signal_type != 'delivery_report'
+      @_sendData 'delivery_report', {signal_id: signal.signal_id},  signal.from_guid
+
     switch signal.signal_type
       when 'offer'
         partner ||= @client.addPartner(guid: signal.from_guid)
@@ -274,14 +281,27 @@ class WebRTC.SyncEngine
           partner.capturingConnection.handleRemoteICECandidates candidate
       when 'captured.candidate'
         partner.capturingConnection.handleRemoteICECandidate signal_data
+      when 'delivery_report'
+        clearTimeout(sendedSignals[signal_data.signal_id]) if sendedSignals[signal_data.signal_id]
+        sendedSignals[signal_data.signal_id] = null
       else
         WebRTC.log 'warning', 'Unknown signal type "' + signal.signal_type + '" received.', signal
         break
 
-  _sendData: (signal, data, to = null)->
-    output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data)}
+  _sendData: (signal, data, to = null, options = {})->
+    signalID = "#{signal}-#{@_timestamp()}"
+
+    if signal != 'delivery_report'
+      tryCount = options.tryCount ||= 1
+      if TRY_COUNT_LIMIT <= tryCount
+        sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 200 )
+
+    output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data), signal_id: signalID}
     WebRTC.log("Signal [#{signal}] sended", output)
     @faye.publish(@roomUrl, output)
+
+  _timestamp: ->
+    new Date().getTime()
 
 
 class WebRTC.Partner
