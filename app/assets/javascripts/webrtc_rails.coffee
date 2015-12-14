@@ -252,7 +252,7 @@ class WebRTC.SyncEngine
     partner = @client.getPartner(signal.from_guid)
     WebRTC.log("Signal [#{signal.signal_type}] received: ", signal_data)
 
-    if signal.signal_type != 'delivery_report'
+    if signal.signal_type != 'delivery_report' and signal.signal_type != 'connect'
       @_sendData 'delivery_report', {signal_id: signal.signal_id},  signal.from_guid
 
     switch signal.signal_type
@@ -354,6 +354,7 @@ class WebRTC.Partner
 
   handleOffer: (offer) ->
     @source = false
+    return if @receivedSignals['offer']
     @receivedSignals['offer'] = offer
     offer = new WebRTC.RTCSessionDescription(offer)
     @connection.setRemoteDescription offer
@@ -363,6 +364,7 @@ class WebRTC.Partner
     ), (err)-> WebRTC.log("Answer creating error", err)
 
   handleAnswer: (answer) ->
+    return if @receivedSignals['answer']
     @receivedSignals['answer'] = answer
     @connection.setRemoteDescription new WebRTC.RTCSessionDescription(answer)
     @sendLocalICECandidates()
@@ -412,6 +414,7 @@ class WebRTC.Partner
     @connected = false
     #TODO: send signal
     @client.trigger 'partner.disconnect', @
+    try @stopScreenCapturing() catch ex
 
 class WebRTC.CapturingConnection
   guid: null
