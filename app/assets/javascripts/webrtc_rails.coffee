@@ -8,7 +8,14 @@ CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
 PLUGIN_VERSION_NEEDED = '1.0.1'
 CHECK_VERSION_TIMEOUT = 2000
 TRY_COUNT_LIMIT = 3
+screenshot_id = 0
+screenshot_callbacks = {}
 
+
+window.addEventListener 'message', (event)->
+  return if event.data.target != CAPTURE_EVENT_FRONTEND
+  return if event.data.type != 'screenshot'
+  WebRTC.onScreenShot(event.data.data)
 
 WebRTC =
   defaultOptions: {}
@@ -48,6 +55,21 @@ WebRTC =
     console.log.apply(console, arguments)
 
 
+  makeScreenshot: (options, callback)->
+    if options instanceof Function
+      callback = options
+      options = {}
+    screenshot_id += 1
+    options['screenshot_id'] = screenshot_id
+    screenshot_callbacks[screenshot_id] = callback
+    window.postMessage({target: CAPTURE_EVENT_BACKEND, type: 'make_screenshot', data: options}, '*')
+
+  onScreenShot: (data)->
+    screenshot_id = data.screenshot_id
+    if screenshot_callbacks[screenshot_id]
+      screenshot_callbacks[screenshot_id](data.image)
+
+
 class WebRTC.Client extends MicroEvent
 
   stream: null
@@ -78,7 +100,9 @@ class WebRTC.Client extends MicroEvent
 
 
   setupLocalVideo: ->
-    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), ((error)=> WebRTC.log(error))
+    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), (error)=>
+      @trigger 'user_media_error', error
+      WebRTC.log error
 
   handleLocalStreem: (stream)->
     @stream ||= stream

@@ -24,6 +24,7 @@ function onEvent(type, data) {
     case 'stop_capture' : stopCapture(data); break;
     case 'handle_answer' : handleAnswer(data); break;
     case 'remote_candidate' : handleRemoteICECandidate(data); break;
+    case 'make_screenshot' : makeScreenshot(data); break;
     case 'version' : sendEvent('version', VERSION)
   }
 }
@@ -118,4 +119,45 @@ function disconnect() {
       pearConnection.close();
     }
   } catch(e) {}
+}
+
+/*--- ScreenShot ---*/
+function makeScreenshot(options) {
+  options = options || {};
+  chrome.tabs.captureVisibleTab(null, { format: "png" }, createImage.bind(options));
+}
+
+function createCanvas(canvasWidth, canvasHeight) {
+  var canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  return canvas;
+}
+
+function createImage(dataURL) {
+  var options = this;
+
+  if (!options.width || !options.height) {
+    sendEvent('screenshot', {screenshot_id: options.screenshot_id, image: dataURL});
+    return
+  }
+
+  var canvas = createCanvas(options.width, options.height);
+  var context = canvas.getContext('2d');
+  var croppedImage = new Image();
+
+  croppedImage.onload = function() {
+    // parameter 1: source image (screenshot)
+    // parameter 2: source image x coordinate
+    // parameter 3: source image y coordinate
+    // parameter 4: source image width
+    // parameter 5: source image height
+    // parameter 6: destination x coordinate
+    // parameter 7: destination y coordinate
+    // parameter 8: destination width
+    // parameter 9: destination height
+    context.drawImage(croppedImage, (options.x || 0), (options.y || 0), options.width, options.height, 0, 0, options.width, options.height);
+    sendEvent('screenshot', {screenshot_id: options.screenshot_id, image: canvas.toDataURL()});
+  };
+  croppedImage.src = dataURL;
 }

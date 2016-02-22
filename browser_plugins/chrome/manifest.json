@@ -17,6 +17,8 @@
   }],
   "permissions": [
     "desktopCapture",
-    "tabs"
+    "tabs",
+    "activeTab",
+    "<all_urls>"
   ]
 }
