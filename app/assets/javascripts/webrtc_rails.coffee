@@ -1,3 +1,4 @@
+#= require adapter-latest
 #= require microevent
 #= require_self
 
@@ -32,23 +33,11 @@ WebRTC =
       throw 'Error attaching stream to element.'
     element.play()
 
-  RTCPeerConnection: window.mozRTCPeerConnection || window.webkitRTCPeerConnection
-  RTCSessionDescription: window.RTCSessionDescription || window.mozRTCSessionDescription
-  RTCIceCandidate: window.RTCIceCandidate || window.mozRTCIceCandidate
+  RTCPeerConnection: window.RTCPeerConnection
+  RTCSessionDescription: window.RTCSessionDescription
+  RTCIceCandidate: window.RTCIceCandidate
 
-  getUserMedia: (navigator.getUserMedia || navigator.mozGetUserMedia || navigator.webkitGetUserMedia).bind(navigator)
-
-  createIceServer: (url, username, password) ->
-    urlParts = url.split(':')
-    return {url} if urlParts[0].indexOf('stun') == 0
-    return {url, password, username} if urlParts[0].indexOf('turn') == 0
-    null
-
-  createIceServers: (urls, username, password) ->
-    if navigator.webkitGetUserMedia
-      return {urls: urls, credential: password, username: username}
-
-    urls.map (url)-> WebRTC.createIceServer(url, username, password)
+  getUserMedia: navigator.getUserMedia.bind(navigator)
 
   log: ->
     return unless WebRTC.debug
@@ -100,11 +89,11 @@ class WebRTC.Client extends MicroEvent
 
 
   setupLocalVideo: ->
-    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStreem(stream)), (error)=>
+    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStream(stream)), (error)=>
       @trigger 'user_media_error', error
       WebRTC.log error
 
-  handleLocalStreem: (stream)->
+  handleLocalStream: (stream)->
     @stream ||= stream
     WebRTC.attachMediaStream(@videoElement, stream) if @videoElement
     @trigger 'local_stream', stream
@@ -315,10 +304,10 @@ class WebRTC.SyncEngine
   _sendData: (signal, data, to = null, options = {})->
     signalID = "#{signal}-#{@_timestamp()}"
 
-    if signal != 'delivery_report' and signal != 'connect'
-      tryCount = options.tryCount ||= 1
-      if TRY_COUNT_LIMIT >= tryCount
-        sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 1000 )
+    # if signal != 'delivery_report' and signal != 'connect'
+    #   tryCount = options.tryCount ||= 1
+    #   if TRY_COUNT_LIMIT >= tryCount
+    #     sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 1000 )
 
     output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data), signal_id: signalID}
     WebRTC.log("Signal [#{signal}] sended", output)
@@ -362,7 +351,10 @@ class WebRTC.Partner
     @localICECandidates = []
     @localICECandidatesComplete = false
     @receivedSignals = {}
-    configuration = iceServers: @client.options.iceServers
+    configuration =
+      rtcpMuxPolicy: "require"
+      bundlePolicy: "max-bundle"
+      iceServers: @client.options.iceServers || []
     @connection = new WebRTC.RTCPeerConnection(configuration)
     @connection.addStream @client.stream
     @connection.addEventListener 'icecandidate', @handleLocalICECandidate.bind(@)
