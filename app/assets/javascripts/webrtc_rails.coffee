@@ -72,6 +72,10 @@ class WebRTC.Client extends MicroEvent
     media:
       audio: true
       video: true
+    offer:
+      offerToReceiveAudio: 1,
+      offerToReceiveVideo: 1,
+      iceRestart: true
 
   constructor: (options)->
     @options = $.extend {}, @defaultOptions, WebRTC.defaultOptions, options
@@ -363,10 +367,10 @@ class WebRTC.Partner
 
   sendOffer: ->
     @source = true
-    @connection.createOffer ((offer) =>
+    @connection.createOffer(@client.options.offer).then((offer) =>
       @connection.setLocalDescription offer
       @syncEngine.sendOffer @guid, offer
-    ), ->
+    ).catch (error)->
 
   handleOffer: (offer) ->
     @source = false
