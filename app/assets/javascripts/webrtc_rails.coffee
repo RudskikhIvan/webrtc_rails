@@ -6,11 +6,13 @@
 
 CAPTURE_EVENT_FRONTEND = 'screen_capture_frontend'
 CAPTURE_EVENT_BACKEND = 'screen_capture_backend'
-PLUGIN_VERSION_NEEDED = '1.0.1'
+PLUGIN_VERSION_NEEDED = '1.2.0'
 CHECK_VERSION_TIMEOUT = 2000
 TRY_COUNT_LIMIT = 3
+PARTNER_CONNECTION_TIMEOUT = 10000
+
 screenshot_id = 0
-screenshot_callbacks = {}
+screenshot_callbacks = {} 
 
 
 window.addEventListener 'message', (event)->
@@ -106,12 +108,13 @@ class WebRTC.Client extends MicroEvent
   getPartner: (guid)->
     @partners[guid]
 
-  addPartner: (data)->
+  addPartner: (data, incoming = false)->
     @removePartner(data.guid)
     partner = new WebRTC.Partner data, client: @
     @partners[data.guid] = partner
     partner.connect()
     @trigger 'added_partner', partner
+    @waitConnectionFor(data.guid) if incoming
     partner
 
   removePartner: (guid)->
@@ -165,9 +168,10 @@ class WebRTC.Client extends MicroEvent
     conn.addEventListener 'addstream', (event)=> @handlePluginStream(event.stream)
     conn.addEventListener 'icecandidate', (event)=> @sendCapturingEngineEvent('remote_candidate', event.candidate) if event.candidate
     conn.setRemoteDescription(new WebRTC.RTCSessionDescription(offer))
-    conn.createAnswer (answer)=>
+    conn.createAnswer().then((answer)=>
       conn.setLocalDescription(new WebRTC.RTCSessionDescription(answer))
       @sendCapturingEngineEvent('handle_answer', answer)
+    ).catch (error)=> console.error('createPluginAnswerError', e)
     @pluginConnection = conn
 
   hanglePluginICECandidate: (candidate)->
@@ -211,6 +215,20 @@ class WebRTC.Client extends MicroEvent
     vs = version.split('.')
     vs[0] * 100 + (vs[1] || 0) * 10 + (vs[2] || 0)
 
+  partnerConnected: (guid)->
+    partner = @getPartner(guid)
+    return false if !partner
+    iceState = partner.connection.iceConnectionState
+    iceState == 'completed' or iceState == 'connected'
+
+  waitConnectionFor: (guid)->
+    check = =>
+      partner = @getPartner(guid)
+      if partner and !@partnerConnected(guid)
+        partner.tryReconnect()
+
+    setTimeout check, PARTNER_CONNECTION_TIMEOUT
+
 
 sendedSignals = {}
 class WebRTC.SyncEngine
@@ -246,6 +264,9 @@ class WebRTC.SyncEngine
   sendAnswer: (to, answer)->
     @_sendData('answer', answer, to)
 
+  sendReconnect: (to)->
+    @_sendData 'reconnect', {guid: @client.guid}, to
+
   sendCapturedOffer: (to, offer)->
     @_sendData('captured.offer', offer, to)
 
@@ -269,51 +290,41 @@ class WebRTC.SyncEngine
     partner = @client.getPartner(signal.from_guid)
     WebRTC.log("Signal [#{signal.signal_type}] received: ", signal_data)
 
-    if signal.signal_type != 'delivery_report' and signal.signal_type != 'connect'
-      @_sendData 'delivery_report', {signal_id: signal.signal_id},  signal.from_guid
-
     switch signal.signal_type
       when 'offer'
         partner ||= @client.addPartner(guid: signal.from_guid)
         partner.handleOffer signal_data
       when 'answer'
-        partner.handleAnswer signal_data
+        partner.handleAnswer signal_data if partner
       when 'candidates'
-        partner.handleRemoteICECandidates signal_data
+        partner.handleRemoteICECandidates signal_data if partner
       when 'candidate'
-        partner.handleRemoteICECandidate signal_data
+        partner.handleRemoteICECandidate signal_data if partner
       when 'connect'
+        partner = @client.addPartner(signal_data, true)
+        partner.sendOffer()
+      when 'reconnect'
         partner = @client.addPartner(signal_data)
         partner.sendOffer()
       when 'disconnect'
         @client.removePartner(signal.from_guid)
       when 'captured.offer'
-        partner.capturingConnection.handleOffer signal_data
+        partner.capturingConnection.handleOffer signal_data if partner
       when 'captured.answer'
-        partner.capturingConnection.handleAnswer signal_data
+        partner.capturingConnection.handleAnswer signal_data if partner
       when 'captured.stop'
-        partner.stopScreenCapturing()
+        partner.stopScreenCapturing() if partner
       when 'captured.candidates'
         for candidate in signal_data
-          partner.capturingConnection.handleRemoteICECandidates candidate
+          partner.capturingConnection.handleRemoteICECandidates candidate if partner
       when 'captured.candidate'
-        partner.capturingConnection.handleRemoteICECandidate signal_data
-      when 'delivery_report'
-        clearTimeout(sendedSignals[signal_data.signal_id]) if sendedSignals[signal_data.signal_id]
-        sendedSignals[signal_data.signal_id] = null
+        partner.capturingConnection.handleRemoteICECandidate signal_data if partner
       else
         WebRTC.log 'warning', 'Unknown signal type "' + signal.signal_type + '" received.', signal
         break
 
   _sendData: (signal, data, to = null, options = {})->
-    signalID = "#{signal}-#{@_timestamp()}"
-
-    # if signal != 'delivery_report' and signal != 'connect'
-    #   tryCount = options.tryCount ||= 1
-    #   if TRY_COUNT_LIMIT >= tryCount
-    #     sendedSignals[signalID] = setTimeout( (=> @_sendData(signal, data, to, {tryCount: tryCount + 1})), tryCount * 1000 )
-
-    output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data), signal_id: signalID}
+    output = {from_guid: @client.guid, to_guid: to, signal_type: signal, data: JSON.stringify(data)}
     WebRTC.log("Signal [#{signal}] sended", output)
     @faye.publish(@roomUrl, output)
 
@@ -352,6 +363,7 @@ class WebRTC.Partner
   videoMuted: -> !@stream?.getVideoTracks()[0].enabled
 
   connect: ->
+    @disconnect() if @connection
     @localICECandidates = []
     @localICECandidatesComplete = false
     @receivedSignals = {}
@@ -370,7 +382,7 @@ class WebRTC.Partner
     @connection.createOffer(@client.options.offer).then((offer) =>
       @connection.setLocalDescription offer
       @syncEngine.sendOffer @guid, offer
-    ).catch (error)->
+    ).catch (error)-> console.error('creationOfferError', error)
 
   handleOffer: (offer) ->
     @source = false
@@ -378,10 +390,10 @@ class WebRTC.Partner
     @receivedSignals['offer'] = offer
     offer = new WebRTC.RTCSessionDescription(offer)
     @connection.setRemoteDescription offer
-    @connection.createAnswer ((answer) =>
+    @connection.createAnswer().then((answer) =>
       @connection.setLocalDescription new WebRTC.RTCSessionDescription(answer)
       @syncEngine.sendAnswer @guid, answer
-    ), (err)-> WebRTC.log("Answer creating error", err)
+    ).catch (error)-> console.error('creationAnswerError', error)
 
   handleAnswer: (answer) ->
     return if @receivedSignals['answer']
@@ -432,9 +444,14 @@ class WebRTC.Partner
   disconnect: ->
     try @connection.close() catch ex
     @connected = false
-    #TODO: send signal
+    @connection = null
     @client.trigger 'partner.disconnect', @
     try @stopScreenCapturing() catch ex
+
+  tryReconnect: ->
+    @connect()
+    @syncEngine.sendReconnect @guid
+
 
 class WebRTC.CapturingConnection
   guid: null
@@ -466,6 +483,7 @@ class WebRTC.CapturingConnection
     @connection.addEventListener 'addstream', (event)=> @onRemoteStreamAdded(event.stream)
     @connection.addEventListener 'removestream', @onRemoteStreamRemoved.bind(@)
 
+
   handleLocalICECandidate: (event)->
     candidate = event.candidate
     if candidate
@@ -477,10 +495,10 @@ class WebRTC.CapturingConnection
   handleOffer: (offer)->
     @connect()
     @connection.setRemoteDescription(new WebRTC.RTCSessionDescription(offer))
-    @connection.createAnswer ((answer) =>
+    @connection.createAnswer().then((answer) =>
       @connection.setLocalDescription(new WebRTC.RTCSessionDescription(answer))
       @syncEngine.sendCapturedAnswer @guid, answer
-    ), ->
+    ).catch (error)-> console.error('creationCapturingAnswerError', error)
 
   handleRemoteICECandidate: (candidate)->
     @connection.addIceCandidate(new WebRTC.RTCIceCandidate(candidate))
@@ -498,9 +516,10 @@ class WebRTC.CapturingConnection
 
   sendCapturedStream: (stream)->
     @connect(stream)
-    @connection.createOffer (offer)=>
+    @connection.createOffer(@client.options.offer).then( (offer)=>
       @connection.setLocalDescription(new WebRTC.RTCSessionDescription(offer))
       @syncEngine.sendCapturedOffer @guid, offer
+    ).catch (error)-> console.error('creationCapturingOfferError', error)
 
   disconnect: ->
     @closeConnection()

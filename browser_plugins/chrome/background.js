@@ -2,7 +2,7 @@ var localStream = null;
 var captureParams = null;
 var partners = {};
 var pearConnection = null;
-var VERSION = '1.0.1';
+var VERSION = '1.2.0';
 
 chrome.extension.onMessage.addListener(function(request){
   if (request && request.type) onEvent(request.type, request.data);
@@ -82,10 +82,13 @@ function createConnection(stream) {
   pearConnection = new webkitRTCPeerConnection({iceServers: []});
   pearConnection.addStream(stream);
   pearConnection.addEventListener('icecandidate', handleLocalICECandidate.bind(this));
-  pearConnection.createOffer(function(offer){
-    pearConnection.setLocalDescription(new RTCSessionDescription(offer));
-    sendEvent('send_offer', offer);
-  });
+  pearConnection.createOffer(
+    function(offer){
+      pearConnection.setLocalDescription(new RTCSessionDescription(offer));
+      sendEvent('send_offer', offer);
+    },
+    function(error){ console.log(error) }
+  )
 }
 
 function onStreamEnded(){
