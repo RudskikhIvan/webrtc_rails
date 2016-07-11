@@ -1,12 +1,13 @@
 
-console.log('capturing plugin inited');
+var clientId = parseInt(Math.random(1) * 10000000);
+console.log('capturing plugin inited', clientId);
 //Send event to page script
 function sendEventToPage(event_name, data) {
     window.postMessage({target: 'screen_capture_frontend', type: event_name, data: data}, '*');
 }
 
 function sendEventToBackground(event_name, data, callback) {
-    chrome.extension.sendMessage({type: event_name, data: data}, callback);
+    chrome.extension.sendMessage({type: event_name, data: data, clientId: clientId}, callback);
 }
 
 function onPageEvent(event_name, data) {
