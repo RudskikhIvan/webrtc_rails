@@ -71,6 +71,7 @@ class WebRTC.Client extends MicroEvent
   pluginVersion: null
 
   defaultOptions:
+    connectWithoutMedia: false
     media:
       audio: true
       video: true
@@ -95,9 +96,12 @@ class WebRTC.Client extends MicroEvent
 
 
   setupLocalVideo: ->
-    WebRTC.getUserMedia @options.media, ((stream)=> @handleLocalStream(stream)), (error)=>
-      @trigger 'user_media_error', error
-      WebRTC.log error
+    WebRTC.getUserMedia @options.media,
+      ((stream)=> @handleLocalStream(stream)),
+      (error)=>
+        @connect() if @options.connectWithoutMedia
+        @trigger 'user_media_error', error
+        WebRTC.log error
 
   handleLocalStream: (stream)->
     @stream ||= stream
@@ -229,6 +233,10 @@ class WebRTC.Client extends MicroEvent
 
     setTimeout check, PARTNER_CONNECTION_TIMEOUT
 
+  disconnect: ->
+    $.each @partners || {}, (k,partner)->
+      partner.disconnect()
+
 
 sendedSignals = {}
 class WebRTC.SyncEngine
@@ -350,17 +358,17 @@ class WebRTC.Partner
 
     @client.trigger 'partner.created', @
 
-  muteAudio: -> @stream?.getAudioTracks()[0].enabled = false
+  muteAudio: -> @stream?.getAudioTracks()[0]?.enabled = false
 
-  muteVideo: -> @stream?.getVideoTracks()[0].enabled = false
+  muteVideo: -> @stream?.getVideoTracks()[0]?.enabled = false
 
-  unmuteAudio: -> @stream?.getAudioTracks()[0].enabled = true
+  unmuteAudio: -> @stream?.getAudioTracks()[0]?.enabled = true
 
-  unmuteVideo: -> @stream?.getVideoTracks()[0].enabled = true
+  unmuteVideo: -> @stream?.getVideoTracks()[0]?.enabled = true
 
-  audioMuted: -> !@stream?.getAudioTracks()[0].enabled
+  audioMuted: -> !@stream?.getAudioTracks()[0]?.enabled
 
-  videoMuted: -> !@stream?.getVideoTracks()[0].enabled
+  videoMuted: -> !@stream?.getVideoTracks()[0]?.enabled
 
   connect: ->
     @disconnect() if @connection
@@ -372,7 +380,7 @@ class WebRTC.Partner
       bundlePolicy: "max-bundle"
       iceServers: @client.options.iceServers || []
     @connection = new WebRTC.RTCPeerConnection(configuration)
-    @connection.addStream @client.stream
+    @connection.addStream @client.stream if @client.stream
     @connection.addEventListener 'icecandidate', @handleLocalICECandidate.bind(@)
     @connection.addEventListener 'addstream', (event)=> @onRemoteStreamAdded(event.stream)
     @connection.addEventListener 'removestream', @onRemoteStreamRemoved.bind(@)
