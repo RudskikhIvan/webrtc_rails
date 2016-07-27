@@ -129,7 +129,7 @@ AppTab.prototype.handleRemoteICECandidate = function(candidate) {
 
 AppTab.prototype.disconnect = function(){
   try {
-    if ( thid.pearConnection ) {
+    if ( this.pearConnection ) {
       if ( localStream ) this.pearConnection.removeStream(localStream);
       this.pearConnection.close();
       this.pearConnection = null;

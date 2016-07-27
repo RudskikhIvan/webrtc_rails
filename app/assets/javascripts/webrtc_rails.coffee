@@ -221,7 +221,7 @@ class WebRTC.Client extends MicroEvent
 
   partnerConnected: (guid)->
     partner = @getPartner(guid)
-    return false if !partner
+    return false if !partner or !partner.connection
     iceState = partner.connection.iceConnectionState
     iceState == 'completed' or iceState == 'connected'
 
@@ -524,7 +524,7 @@ class WebRTC.CapturingConnection
 
   sendCapturedStream: (stream)->
     @connect(stream)
-    @connection.createOffer(@client.options.offer).then( (offer)=>
+    @connection.createOffer(offerToReceiveVideo: true).then( (offer)=>
       @connection.setLocalDescription(new WebRTC.RTCSessionDescription(offer))
       @syncEngine.sendCapturedOffer @guid, offer
     ).catch (error)-> console.error('creationCapturingOfferError', error)
