@@ -524,7 +524,7 @@ class WebRTC.CapturingConnection
 
   sendCapturedStream: (stream)->
     @connect(stream)
-    @connection.createOffer(offerToReceiveVideo: true).then( (offer)=>
+    @connection.createOffer().then( (offer)=>
       @connection.setLocalDescription(new WebRTC.RTCSessionDescription(offer))
       @syncEngine.sendCapturedOffer @guid, offer
     ).catch (error)-> console.error('creationCapturingOfferError', error)
